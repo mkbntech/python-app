@@ -30,3 +30,29 @@ jobs:
           push: true
           # We use the GitHub SHA to create a unique tag for every build
           tags: ${{ secrets.DOCKER_USERNAME }}/python-app:${{ steps.set_sha.outputs.short_sha }}
+
+  update-manifest:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Infrastructure Repo
+        uses: actions/checkout@v3
+        with:
+          repository: mkbntech/infra-repo
+          token: ${{ secrets.INFRA_REPO_TOKEN }}
+          path: infra-repo
+
+      - name: Update Image Tag in Helm Values
+        run: |
+          cd infra-repo
+          # Using the short SHA passed from the previous job
+          yq -i ".image.tag = \"${{ needs.build-and-push.outputs.short_sha }}\"" helm-charts/python-app/values.yaml
+          
+      - name: Commit and Push to Infra Repo
+        run: |
+          cd infra-repo
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add .
+          git commit -m "Deploying image tag ${{ needs.build-and-push.outputs.short_sha }}"
+          git push
